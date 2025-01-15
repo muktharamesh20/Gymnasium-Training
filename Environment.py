@@ -1,16 +1,17 @@
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 import random
 from treys import Evaluator, Card
 import bounty_handler
+from stable_baselines3.common.vec_env import VecEnv
 
 class BountyHoldemEnv(gym.Env):
     def __init__(self):
         super(BountyHoldemEnv, self).__init__()
         self.evaluator = Evaluator()
         self.max_rounds = 1000
-        self.action_space = spaces.MultiDiscrete(10)  # 0: fold, 1: call, 2: bet, 3: check; bet amounts in increments of 10 (0 to 400)
+        self.action_space = spaces.MultiDiscrete([9])  # 0: fold, 1: call, 2: bet, 3: check; bet amounts in increments of 10 (0 to 400)
 
         # Define the observation space for the first tensor
         self.tensor1_shape = (4, 13, 6)
@@ -21,7 +22,7 @@ class BountyHoldemEnv(gym.Env):
         space2 = spaces.MultiBinary(self.tensor2_shape)
 
         # Combine the two spaces into a single observation space
-        self.observation_space = spaces.Tuple((space1, space2))
+        self.observation_space = spaces.Box(0,1, [4,13,48], dtype=np.int8)
 
         self.ranks = "23456789TJQKA"
         self.reset()
@@ -40,7 +41,7 @@ class BountyHoldemEnv(gym.Env):
             dealt_cards.append(self.deck.pop())
         return dealt_cards
 
-    def reset(self):
+    def reset(self, seed = None):
         self.rounds_played = 0
         self.action_round = 0
         self.player_delta = 0
@@ -61,7 +62,7 @@ class BountyHoldemEnv(gym.Env):
         self.betting_action_log = dict()
         self.action_log = dict()
         state = self.get_round_initial_state(True)
-        return state
+        return state, {}
 
     def reset_round(self):
         if self.rounds_played % 25 == 0:
@@ -115,14 +116,14 @@ class BountyHoldemEnv(gym.Env):
             
         raise Exception("Invalid Starting State")
             
-    def step(self, action, dealer, opponent_model = None):
+    def step(self, action, opponent_model = None):
         assert self.action_space.contains(action), "Invalid Action"
 
 
         
         
 
-
+        return np.zeros((4,13,48)), 0, False, "trunc", {}
 
 
         '''
@@ -304,6 +305,8 @@ class BountyHoldemEnv(gym.Env):
             elif index == 3: #river
                 channel_index = 4
             state[0][rank_index][suit_index][channel_index] = 1
+
+        return np.zeros((4,13,30))
         '''
         index 1: #Card Space
 
