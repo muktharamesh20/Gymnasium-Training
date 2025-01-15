@@ -1,5 +1,11 @@
+import os
 import gym
 import numpy as np
+from collections import deque
+from CustomPPO import CustomPPO
+from CustomPolicy import CustomPolicy
+from Environment import BountyHoldemEnv
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,8 +13,6 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.callbacks import BaseCallback
-from collections import deque
-import os
 import bounty_handler
 
 import torch.nn.functional as F
@@ -77,7 +81,7 @@ class CustomPPOAgent:
         self.models = deque(maxlen=n_top_models)
         self.elo_ratings = []
 
-        self.model = PPO(CustomPolicy, env, verbose=1)
+        self.model = CustomPPO(CustomPolicy, env, verbose=1)
         self.best_model = None
 
     def train(self, total_timesteps=15000, eval_freq=500):
@@ -133,7 +137,7 @@ class CustomPPOAgent:
 
 # Example usage
 if __name__ == "__main__":
-    env = gym.make('BountyHoldemEnv-v0')
+    env = gym.make('BountyHoldem-v0')
     agent = CustomPPOAgent(env)
     agent.train(total_timesteps=15000)
     agent.load_best_model()
