@@ -3,6 +3,7 @@
 from stable_baselines3 import PPO
 from Environment import BountyHoldemEnv
 from siamese_policy import SiamesePolicy
+import gymnasium as gym
 
 class Agent:
     def __init__(self, environment):
@@ -24,9 +25,24 @@ class Agent:
         self.environment.handle_round_end(result)
         return result
 
-# Example usage:
+'''
 env = BountyHoldemEnv()
 agent = Agent(env)
 agent.train(timesteps=10000)
 result = agent.play_round()
-print(f"Round result: {result}")
+print(f"Round result: {result}")'''
+
+env = BountyHoldemEnv()
+
+episodes = 1
+
+for ep in range(episodes):
+    obs, _ = env.reset()
+    done = False
+    while not done:
+        env.render()
+        action = int(input("Enter action: "))
+        obs, reward, done, trunc, info = env.step(action)
+        print("Reward:",reward)
+
+env.close()
