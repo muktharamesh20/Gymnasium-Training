@@ -14,7 +14,7 @@ class BountyHoldemEnv(gym.Env):
         self.action_space = spaces.MultiDiscrete([9])  # 0: fold, 1: call, 2: check, bet amounts in increments of 10 (0 to 400)
 
         # Observation Space
-        self.observation_space_shape = (4, 13, 31)
+        self.observation_space_shape = (4, 13, 30)
         self.observation_space = spaces.Box(low=0, high=1, shape=self.observation_space_shape, dtype=float)
 
         self.ranks = "23456789TJQKA"
@@ -48,10 +48,10 @@ class BountyHoldemEnv(gym.Env):
         self.street = 'preflop'
         self.deck = self.create_deck()
         self.player_hand = self.deal_cards(2, [])
-        print("51")
+        #print("51")
         self.community_cards = []
         self.opponent_hand = self.deal_cards(2, [])
-        print("54")
+        #print("54")
         self.assign_bounties()
         self.opp_bounty_handler = bounty_handler.Bounty()
         self.player_bounty_handler = bounty_handler.Bounty()
@@ -73,12 +73,12 @@ class BountyHoldemEnv(gym.Env):
         self.street = 'preflop'
         self.deck = self.create_deck()
         self.player_hand = self.deal_cards(2, [])
-        print("76")
+        #print("76")
         self.community_cards = []
         self.opponent_hand = self.deal_cards(2, [])
         self.betting_action_log = dict()
         self.action_log = dict()
-        print("79")
+        #print("79")
 
     def get_round_initial_state(self, first_first_round = False, opponent_model=None):
         if self.rounds_played > self.max_rounds:
@@ -96,7 +96,7 @@ class BountyHoldemEnv(gym.Env):
 
         # Determine whose turn it is first based on the round number
         self.player_is_dealer = self.rounds_played % 2 == 0
-        print("initial round func", self.rounds_played, self.player_is_dealer)
+        #print("initial round func", self.rounds_played, self.player_is_dealer)
 
         if self.street == "preflop" and self.action_round == 0:
             self.betting_action_log['preflop'] = [1,1]
@@ -124,13 +124,13 @@ class BountyHoldemEnv(gym.Env):
     
     def get_state(self, player_not_opp = True):
         # Implement the logic for getting the current state
-        state = np.zeros(self.observation_space_shape) #(4,13,31)
+        state = np.zeros(self.observation_space_shape) #(4,13,30)
 
-        # 0: player hand, 1: opponent hand, 2: flop, 3: turn, 4: river, 5: player bounty, 6: opponent bounty
-        # 7 - 12: preflop 
-        # 13 - 18: flop
-        # 19 - 24: turn
-        # 25 - 30: river
+        # 0: player hand, 1: flop, 2: turn, 3: river, 4: player bounty, 5: opponent bounty
+        # 6 - 11: preflop 
+        # 12 - 17: flop
+        # 17 - 23: turn
+        # 24 - 29: river
         if player_not_opp:
             for card in self.player_hand:
                 rank, suit = card
@@ -139,10 +139,10 @@ class BountyHoldemEnv(gym.Env):
                 state[suit_index][rank_index][0] = 1
             
             my_bounty_index = self.ranks.index(self.player_bounty)
-            state[:,my_bounty_index,5] = np.array([1,1,1,1])
+            state[:,my_bounty_index,4] = np.array([1,1,1,1])
             opp_bounties = self.player_bounty_handler.get_normalized_percentages()
             for index, prob in enumerate(opp_bounties):
-                state[:,index,6] = np.array([prob,prob,prob,prob])
+                state[:,index,5] = np.array([prob,prob,prob,prob])
         else:
             for card in self.opponent_hand:
                 rank, suit = card
@@ -151,21 +151,21 @@ class BountyHoldemEnv(gym.Env):
                 state[suit_index][rank_index][0] = 1
 
             opp_bounty_index = self.ranks.index(self.opponent_bounty)
-            state[:,opp_bounty_index,5] = np.array([1,1,1,1])
+            state[:,opp_bounty_index,4] = np.array([1,1,1,1])
             player_bounties = self.opp_bounty_handler.get_normalized_percentages()
             for index, prob in enumerate(player_bounties):
-                state[:,index,6] = np.array([prob,prob,prob,prob])
+                state[:,index,5] = np.array([prob,prob,prob,prob])
 
         for index, card in enumerate(self.community_cards):
             rank, suit = card
             rank_index = self.ranks.index(rank)
             suit_index = 'hdcs'.index(suit)
             if index < 3: #flop
-                channel_index = 2 
+                channel_index = 1
             elif index == 3: #turn
-                channel_index = 3
+                channel_index = 2
             elif index == 3: #river
-                channel_index = 4
+                channel_index = 3
             state[suit_index][rank_index][channel_index] = 1
 
         
@@ -173,30 +173,30 @@ class BountyHoldemEnv(gym.Env):
             for street_index, street in enumerate(["preflop", "flop", "turn", "river"]):
                 if street in self.action_log:
                     for index, action in enumerate(self.action_log[street]):
-                        print(action)
+                        #print(action)
                         state_index = index//2
                         if action == "fold": action_index = 0
-                        if action == "check": action_index = 1
-                        if action == "call": action_index = 2
+                        if action == "check": action_index = 2
+                        if action == "call": action_index = 1
                         if "bet" in action: action_index =  int(action[-1])
                         if action in ["small blind", "big blind"]:
                             pass
                         else:
                             if self.player_is_dealer and state_index <= 5:
                                 if index % 2 == 0:
-                                    state[0, action_index, 7 + state_index + 6 * street_index] = 1
+                                    state[0, action_index, 6 + state_index + 6 * street_index] = 1
                                 else:
-                                    state[1, action_index, 7 + state_index + 6 * street_index] = 1
-                                state[2, action_index, 7 + state_index + 6 * street_index] += 1
+                                    state[1, action_index, 6 + state_index + 6 * street_index] = 1
+                                state[2, action_index, 6 + state_index + 6 * street_index] += 1
                             elif not self.player_is_dealer and state_index <= 5:
                                 if index % 2 == 0:
-                                    print(action_index, 7 + state_index + 6 * street_index)
+                                    #print(action_index, 6 + state_index + 6 * street_index)
                                     assert isinstance(action_index, int) 
-                                    assert isinstance(7 + state_index + 6 * street_index, int)
-                                    state[1, action_index, 7 + state_index + 6 * street_index] = 1
+                                    assert isinstance(6 + state_index + 6 * street_index, int)
+                                    state[1, action_index, 6 + state_index + 6 * street_index] = 1
                                 else:
-                                    state[0, action_index, 7 + state_index + 6 * street_index] = 1
-                                state[2, action_index, 7 + state_index + 6 * street_index] += 1
+                                    state[0, action_index, 6 + state_index + 6 * street_index] = 1
+                                state[2, action_index, 6 + state_index + 6 * street_index] += 1
         else:
              for street_index, street in enumerate(["preflop", "flop", "turn", "river"]):
                 if street in self.action_log:
@@ -225,7 +225,13 @@ class BountyHoldemEnv(gym.Env):
         #populate legal actions
         legal_actions = self.get_legal_actions(player_not_opp)
         for index, action in enumerate(legal_actions):
-            state[3, index, 7:] = np.ones(24) * action
+            state[3, index, 6:] = np.ones(24) * action
+
+        #populate total cash so far
+        if player_not_opp: stack = self.player_delta
+        else: stack = self.opponent_delta
+
+        state[:, 9:, 6:30] = np.ones((4, 4, 24)) * stack
 
         return state
             
@@ -235,24 +241,32 @@ class BountyHoldemEnv(gym.Env):
         if not isinstance(action, int) or action < 0 or action > 8 or legal_actions[action] == 0:
             reward, done, _, __ = self.handle_round_end(-1, False)
             self.reset_round()
-            info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
-            return info_tuple[0], -10000000, done, {}, {}
+            if not done:
+                info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
+                return info_tuple[0], -10000000, done, {}, {}
+            else:
+                return np.array(self.observation_space_shape), reward, done, {}, {}
         
         #if the action is legal, we continue the round
         if action == 0: # 0: fold, 1: call, 2: check; bet amounts in increments of 10 (0 to 400)
+            self.action_log.setdefault(self.street, []).append("fold")
             reward, done, _, __ = self.handle_round_end(-1, False)
             self.reset_round()
-            info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
+            if not done:
+                info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
+            else:
+                return np.array(self.observation_space_shape), reward, done, {}, {}
             if len(info_tuple) == 2:
                 return info_tuple[0], reward, done, {}, {}
             else:
                 return info_tuple[0], reward + info_tuple[2], done, {}, {}
         elif action == 1: #call
             self.action_log.setdefault(self.street, []).append("call")
+            self.betting_action_log.setdefault(self.street, []).append(0)
             if self.action_log[self.street][-2] not in ["small blind", "big blind"]:
                 if "bet" in self.action_log[self.street][-2]:
-                    self.player_stack -= self.betting_action_log[self.street][-1]
-                    self.pot += self.betting_action_log[self.street][-1]
+                    self.player_stack -= self.betting_action_log[self.street][-2]
+                    self.pot += self.betting_action_log[self.street][-2]
                 if self.street == "river":
                     reward, done, _, __ = self.handle_round_end(self.evaluate_hands(), True)
                     self.reset_round()
@@ -264,15 +278,15 @@ class BountyHoldemEnv(gym.Env):
                 else:
                     if self.street == "preflop":
                         self.community_cards = self.deal_cards(3, self.community_cards)
-                        print("246", self.community_cards)
+                        #print("246", self.community_cards)
                         self.street = "flop"
                     elif self.street == "flop":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("250", self.community_cards)
+                        #print("250", self.community_cards)
                         self.street = "turn"
                     elif self.street == "turn":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("254", self.community_cards)
+                        #print("254", self.community_cards)
                         self.street = "river"
                     self.current_bet = 0
                     if self.player_is_dealer:
@@ -297,15 +311,15 @@ class BountyHoldemEnv(gym.Env):
                 else:
                     if self.street == "preflop":
                         self.community_cards = self.deal_cards(3, self.community_cards)
-                        print("275")
+                        #print("275")
                         self.street = "flop"
                     elif self.street == "flop":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("279")
+                        #print("279")
                         self.street = "turn"
                     elif self.street == "turn":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("283")
+                        #print("283")
                         self.street = "river"
                     
                     self.current_bet = 0
@@ -345,6 +359,7 @@ class BountyHoldemEnv(gym.Env):
                 opponent_action = random.choices([0,1,2,3,4,5,6,7,8], weights=np.ones(9) * self.get_legal_actions(False))[0]
 
         if opponent_action == 0:  # fold
+            self.action_log.setdefault(self.street, []).append("fold")
             reward, done, player_bounty_hit, opp_bounty_hit = self.handle_round_end(result=1, opp_cards_revealed=False)
             self.reset_round()
             info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
@@ -354,10 +369,11 @@ class BountyHoldemEnv(gym.Env):
                 return info_tuple[0], reward + info_tuple[2], done, {}, {}
         elif opponent_action == 1:  # call:
             self.action_log.setdefault(self.street, []).append("call")
+            self.betting_action_log.setdefault(self.street, []).append(0)
             if self.action_log[self.street][-2] not in ["small blind", "big blind"]:
                 if "bet" in self.action_log[self.street][-2]:
-                    self.opponent_stack -= self.betting_action_log[self.street][-1]
-                    self.pot += self.betting_action_log[self.street][-1]
+                    self.opponent_stack -= self.betting_action_log[self.street][-2]
+                    self.pot += self.betting_action_log[self.street][-2]
                 if self.street == "river":
                     reward, done, _, __ = self.handle_round_end(self.evaluate_hands(), True)
                     self.reset_round()
@@ -369,15 +385,15 @@ class BountyHoldemEnv(gym.Env):
                 else:
                     if self.street == "preflop":
                         self.community_cards = self.deal_cards(3, self.community_cards)
-                        print("335")
+                        #print("335")
                         self.street = "flop"
                     elif self.street == "flop":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("339")
+                        #print("339")
                         self.street = "turn"
                     elif self.street == "turn":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("343")
+                        #print("343")
                         self.street = "river"
                     
                     self.current_bet = 0
@@ -404,15 +420,15 @@ class BountyHoldemEnv(gym.Env):
                 else:
                     if self.street == "preflop":
                         self.community_cards = self.deal_cards(3, self.community_cards)
-                        print("364")
+                        #print("364")
                         self.street = "flop"
                     elif self.street == "flop":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("368")
+                        #print("368")
                         self.street = "turn"
                     elif self.street == "turn":
                         self.community_cards = self.deal_cards(1, self.community_cards)
-                        print("372")
+                        #print("372")
                         self.street = "river"
 
                     self.current_bet = 0
@@ -421,20 +437,20 @@ class BountyHoldemEnv(gym.Env):
                     else:
                         return self.get_state(True), 0, False, {}, {}
             else:
-                return self.handle_opponent(opponent_model)
+                return self.get_state(True), 0, False, {}, {}
         else:  # bet
             self.action_log.setdefault(self.street, []).append("bet" + str(opponent_action))
             betting_amount = self.get_betting_options(False)[opponent_action]
-            print("betting options", self.get_betting_options(False))
+            #print("betting options", self.get_betting_options(False))
             self.betting_action_log.setdefault(self.street, [])
             if not self.betting_action_log[self.street]:
                 self.betting_action_log[self.street].append(betting_amount)
                 raise_amount = betting_amount
             else:
-                print(self.betting_action_log)
+                #print(self.betting_action_log)
                 raise_amount = betting_amount - self.betting_action_log[self.street][-1]
                 self.betting_action_log[self.street].append(raise_amount)
-            print("here, betting amount", betting_amount)
+            #print("here, betting amount", betting_amount)
             self.opponent_stack -= betting_amount
             self.pot += betting_amount
             self.current_bet += raise_amount
@@ -448,8 +464,10 @@ class BountyHoldemEnv(gym.Env):
         #9 Cols: fold, call, check, 1/2 pot, 3/4 pot, 1 pot, 3/2 pot, 2 pots, all in
         if player_not_opp:
             stack = self.player_stack 
+            opp_stack = self.opponent_stack
         else:
             stack = self.opponent_stack
+            opp_stack = self.player_stack
 
         if self.street == "preflop":
             if self.betting_action_log["preflop"] == [1,1]:
@@ -458,12 +476,12 @@ class BountyHoldemEnv(gym.Env):
                 bet_options = np.array([0.5 * self.pot, 0.75 * self.pot, self.pot, 1.5 * self.pot, 2 * self.pot, stack])
                 bet_options = np.round(bet_options).astype(int)
                 last_bet = self.betting_action_log[self.street][-1]
-                legal_actions = np.array([1, 1, 0] + [1 if (x > last_bet * 2 and x <= stack) or x == stack else 0 for x in bet_options])
+                legal_actions = np.array([1, 1, 0] + [1 if (x > last_bet * 2 and x <= stack) or (x == stack and opp_stack != 0) else 0 for x in bet_options])
                 return legal_actions
         else:
             bet_options = np.array([0.5 * self.pot, 0.75 * self.pot, self.pot, 1.5 * self.pot, 2 * self.pot, stack])
             bet_options = np.round(bet_options).astype(int)
-            print("466", self.betting_action_log)
+            #print("466", self.betting_action_log)
             if sum(self.betting_action_log.setdefault(self.street,[])) == 0: #checks or nothing has happend
                 legal_actions = np.array([0, 0, 1] + [1 if (x > 2 and x <= stack) else 0 for x in bet_options])
             else:
@@ -490,7 +508,7 @@ class BountyHoldemEnv(gym.Env):
         Returns: reward, done, my_bounty_hit, opp_bounty_hit
         '''
         #self.rounds_played += 1
-        print("round end action log", self.action_log)
+        #print("round end action log", self.action_log)
 
         normal_winnings = 400 - self.opponent_stack #how much the opponent bet over the round
         opp_winnings = 400 - self.player_stack #how much the player bet over the round
@@ -525,12 +543,13 @@ class BountyHoldemEnv(gym.Env):
         self.player_delta += reward
         self.opponent_delta -= reward
 
-        done = self.rounds_played >= self.max_rounds
+        done = self.rounds_played >= self.max_rounds - 1
         if done:
             if self.player_delta > self.opponent_delta:
                 reward += 100000
             else:
                 reward -= 100000
+            print("done!")
         print("Winner:", result, "Reward:", reward)
         return reward, done, player_hits_bounty, opponent_hits_bounty
     
@@ -543,13 +562,13 @@ class BountyHoldemEnv(gym.Env):
         opponent_score = self.evaluator.evaluate(community_cards, opponent_hand)
 
         if player_score < opponent_score:
-            print("Result: Player win" )
+            #print("Result: Player win" )
             return 1  # Player wins
         elif player_score > opponent_score:
-            print("Result: Opponent win")
+            #print("Result: Opponent win")
             return -1  # Opponent wins
         else:
-            print("Result: Tie")
+            #print("Result: Tie")
             return 0  # Tie
 
     def render(self):
