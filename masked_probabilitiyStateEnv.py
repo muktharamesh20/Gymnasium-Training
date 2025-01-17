@@ -5,16 +5,22 @@ import random
 from treys import Evaluator, Card
 import bounty_handler
 from stable_baselines3.common.vec_env import VecEnv
+from card import GameCard
+from hands import hands
 
-class BountyHoldemEnv(gym.Env):
+class MaskedBountyHoldemEnv(gym.Env):
     def __init__(self):
-        super(BountyHoldemEnv, self).__init__()
+        super(MaskedBountyHoldemEnv, self).__init__()
         self.evaluator = Evaluator()
         self.max_rounds = 1000
         self.action_space = spaces.MultiDiscrete([9])  # 0: fold, 1: call, 2: check, bet amounts in increments of 10 (0 to 400)
 
         # Observation Space
-        self.observation_space_shape = (4, 13, 30)
+        '''
+        bounty hit, prob winning, prob losing, prob opp bounty hit, last 5 moves
+        legal actions
+        '''
+        self.observation_space_shape = (18,1)
         self.observation_space = spaces.Box(low=0, high=1, shape=self.observation_space_shape, dtype=float)
 
         self.ranks = "23456789TJQKA"
@@ -60,11 +66,6 @@ class BountyHoldemEnv(gym.Env):
         state, _ = self.get_round_initial_state(True)
         return state, _
 
-    def get_legal_action_mask(self):
-        mask = np.array(self.get_legal_actions(True))
-
-        return mask
-
     def reset_round(self):
         if self.rounds_played % 25 == 0:
             self.assign_bounties()
@@ -85,9 +86,25 @@ class BountyHoldemEnv(gym.Env):
         self.action_log = dict()
         #print("79")
 
+    def get_legal_action_mask(self):
+        mask = np.array(self.legal_actions)
+
+        return mask
+
+
     def get_round_initial_state(self, first_first_round = False, opponent_model=None):
         if self.rounds_played > self.max_rounds:
             raise Exception("Game Over")
+
+
+        self.legal_actions = []
+        self.num_legal_actions = random.randint(1,9)
+
+        self.legal_actions = [0] * (9-self.num_legal_actions) + [1] * self.num_legal_actions
+        
+        random.shuffle(self.legal_actions)
+
+        
 
         if first_first_round:
             self.betting_action_log['preflop'] = [1,1]
@@ -121,140 +138,124 @@ class BountyHoldemEnv(gym.Env):
                 self.pot += 3
                 self.current_bet = 2
 
-                opp_state, reward, done, _, _ = self.handle_opponent(opponent_model) #opponent makes an action
+                #opp_state, reward, done, _, _ = self.handle_opponent(opponent_model) #opponent makes an action
                 player_state = self.get_state(True)
-                return player_state, {}, reward
+                return player_state, {}, 0
             
         raise Exception("Invalid Starting State")
     
     def get_state(self, player_not_opp = True):
         # Implement the logic for getting the current state
-        state = np.zeros(self.observation_space_shape) #(4,13,30)
+        state = np.zeros(self.observation_space_shape) #(4,13)
 
-        # 0: player hand, 1: flop, 2: turn, 3: river, 4: player bounty, 5: opponent bounty
-        # 6 - 11: preflop 
-        # 12 - 17: flop
-        # 17 - 23: turn
-        # 24 - 29: river
+        '''
+        bounty hit, prob winning, prob losing, prob opp bounty hit, last 5 moves
+        legal actions
+        '''
+        '''
+        player_hand_new = set()
+        community_hand_new = set()
+        prob_calculator = hands()
+
+        bounty_hit = 0
+        perc_opp_bounty_hit = 0
+
         if player_not_opp:
             for card in self.player_hand:
                 rank, suit = card
+                if rank == self.player_bounty:
+                    bounty_hit = 1
                 rank_index = self.ranks.index(rank)
-                suit_index = 'hdcs'.index(suit)
-                state[suit_index][rank_index][0] = 1
-            
-            my_bounty_index = self.ranks.index(self.player_bounty)
-            state[:,my_bounty_index,4] = np.array([1,1,1,1])
-            opp_bounties = self.player_bounty_handler.get_normalized_percentages()
-            for index, prob in enumerate(opp_bounties):
-                state[:,index,5] = np.array([prob,prob,prob,prob])
+                suit_index = 'shdc'.index(suit)
+                player_hand_new.add(GameCard(rank_index, suit_index))
+            perc_opp_bounty_hit = self.player_bounty_handler.get_chance_bounty_hit(self.community_cards)
         else:
             for card in self.opponent_hand:
                 rank, suit = card
+                if rank == self.opponent_bounty:
+                    bounty_hit = 1
                 rank_index = self.ranks.index(rank)
-                suit_index = 'hdcs'.index(suit)
-                state[suit_index][rank_index][0] = 1
-
-            opp_bounty_index = self.ranks.index(self.opponent_bounty)
-            state[:,opp_bounty_index,4] = np.array([1,1,1,1])
-            player_bounties = self.opp_bounty_handler.get_normalized_percentages()
-            for index, prob in enumerate(player_bounties):
-                state[:,index,5] = np.array([prob,prob,prob,prob])
+                suit_index = 'shdc'.index(suit)
+                player_hand_new.add(GameCard(rank_index, suit_index))
+            perc_opp_bounty_hit = self.opp_bounty_handler.get_chance_bounty_hit(self.community_cards)
 
         for index, card in enumerate(self.community_cards):
             rank, suit = card
             rank_index = self.ranks.index(rank)
-            suit_index = 'hdcs'.index(suit)
-            if index < 3: #flop
-                channel_index = 1
-            elif index == 3: #turn
-                channel_index = 2
-            elif index == 3: #river
-                channel_index = 3
-            state[suit_index][rank_index][channel_index] = 1
+            suit_index = 'shdc'.index(suit)
+            community_hand_new.add(GameCard(rank_index, suit_index))
 
-        
+       
+
+        prob_calculator.set_hand_for_new_round(player_hand_new, community_hand_new)
+        perc_win, perc_tie, perc_loss = prob_calculator.approx_win_tie_loss_percentages()'''
+
+        legal_actions = self.legal_actions
+
+        state[9:, 0] = np.array(legal_actions)
+        #state[0,:5] = np.array([bounty_hit, perc_win, perc_tie, perc_loss,perc_opp_bounty_hit])
+        state[0:5, 0] = np.array([random.random() for a in range(5)])
+
+
+        '''
         if player_not_opp:
-            for street_index, street in enumerate(["preflop", "flop", "turn", "river"]):
-                if street in self.action_log:
-                    for index, action in enumerate(self.action_log[street]):
-                        #print(action)
-                        state_index = index//2
-                        if action == "fold": action_index = 0
-                        if action == "check": action_index = 2
-                        if action == "call": action_index = 1
-                        if "bet" in action: action_index =  int(action[-1])
-                        if action in ["small blind", "big blind"]:
-                            pass
-                        else:
-                            state_index = min(state_index, 5)
-                            if self.player_is_dealer and state_index <= 5:
-                                if index % 2 == 0:
-                                    state[0, action_index, 6 + state_index + 6 * street_index] = 1
-                                else:
-                                    state[1, action_index, 6 + state_index + 6 * street_index] = 1
-                                state[2, action_index, 6 + state_index + 6 * street_index] += 1
-                            elif not self.player_is_dealer and state_index <= 5:
-                                if index % 2 == 0:
-                                    #print(action_index, 6 + state_index + 6 * street_index)
-                                    assert isinstance(action_index, int) 
-                                    assert isinstance(6 + state_index + 6 * street_index, int)
-                                    state[1, action_index, 6 + state_index + 6 * street_index] = 1
-                                else:
-                                    state[0, action_index, 6 + state_index + 6 * street_index] = 1
-                                state[2, action_index, 6 + state_index + 6 * street_index] += 1
+            for card in self.player_hand:
+                rank, suit = card
+                rank_index = self.ranks.index(rank)
+                suit_index = 'shdc'.index(suit)
+                player_hand_new.add(GameCard(rank_index, suit_index))
+            
+            my_bounty_index = self.ranks.index(self.player_bounty)
+            state[0, 9] = my_bounty_index/12
+            opp_bounties = self.player_bounty_handler.get_normalized_percentages()
+            state[3,:] = np.array(opp_bounties)
+            state[1, 12] = self.player_stack/400
+            state[2, 12] = self.opponent_stack/400
         else:
-             for street_index, street in enumerate(["preflop", "flop", "turn", "river"]):
-                if street in self.action_log:
-                    for index, action in enumerate(self.action_log[street]):
-                        state_index = index//2
-                        if action == "fold": action_index = 0
-                        if action == "check": action_index = 1
-                        if action == "call": action_index = 2
-                        if "bet" in action: action_index =  int(action[-1])
-                        if action in ["small blind", "big blind"]:
-                            pass
-                        else:
-                            state_index = min(state_index, 5)
-                            if self.player_is_dealer and state_index <= 5:
-                                if index % 2 == 0:
-                                    state[1, action_index, 6 + state_index + 6 * street_index] = 1
-                                else:
-                                    state[0, action_index, 6 + state_index + 6 * street_index] = 1
-                                state[2, action_index, 6 + state_index + 6 * street_index] += 1
-                            elif not self.player_is_dealer and state_index <= 5:
-                                if index % 2 == 0:
-                                    state[0, action_index, 6 + state_index + 6 * street_index] = 1
-                                else:
-                                    state[1, action_index, 6 + state_index + 6 * street_index] = 1
-                                state[2, action_index, 6 + state_index + 6 * street_index] += 1   
+            for card in self.opponent_hand:
+                rank, suit = card
+                rank_index = self.ranks.index(rank)
+                suit_index = 'shdc'.index(suit)
+                player_hand_new.add(GameCard(rank_index, suit_index))
 
-        #populate legal actions
+            opp_bounty_index = self.ranks.index(self.opponent_bounty)
+            state[0,9] = opp_bounty_index/12
+            player_bounties = self.opp_bounty_handler.get_normalized_percentages()
+            state[3,:] = np.array(player_bounties)
+            state[2, 12] = self.player_stack/400
+            state[1, 12] = self.opponent_stack/400
+
+        prob_calculator.set_hand_for_new_round(player_hand_new, community_hand_new)
+        #prob_calculator.print_hand_percentages()
+
+        state[1,:10] = np.array(prob_calculator.get_hand_percentages(True))
+        state[2,:10] = np.array(prob_calculator.get_hand_percentages(False))
+
         legal_actions = self.get_legal_actions(player_not_opp)
-        for index, action in enumerate(legal_actions):
-            state[3, index, 6:] = np.ones(24) * action
 
-        #populate total cash so far
-        if player_not_opp: stack = self.player_delta
-        else: stack = self.opponent_delta
-
-        state[:, 9:, 6:30] = np.ones((4, 4, 24)) * stack
-
+        state[0, :9] = np.array(legal_actions)
+        '''
         return state
+
             
     def step(self, action, opponent_model = None):
         if not isinstance(action, int):
             action = int(action[0])
+        assert(isinstance(action, int))
         #check if action is legal... if it's not, we end the round and give the bot a huge negative reward
-        legal_actions = self.get_legal_actions(True)
+        legal_actions = self.legal_actions
         if not isinstance(action, int) or action < 0 or action > 8 or legal_actions[action] == 0:
-            reward, done, _, __ = self.handle_round_end(-1, False)
+            return self.get_state(True), -1000, True, {}, {}
+            """ reward, done, _, __ = self.handle_round_end(-1, False)
             self.reset_round()
             if not done:
                 info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
                 return info_tuple[0], -10000000, done, {}, {}
             else:
-                return np.array(self.observation_space_shape), -10000000, done, {}, {}
+                return np.array(self.observation_space_shape), -10000000, done, {}, {}"""
+        else:
+            return self.get_state(True), 10, True, {}, {}
+
         
         #if the action is legal, we continue the round
         if action == 0: # 0: fold, 1: call, 2: check; bet amounts in increments of 10 (0 to 400)
@@ -562,7 +563,7 @@ class BountyHoldemEnv(gym.Env):
                 reward -= 100000
             print("done!")
         print("Winner:", result, "Reward:", reward)
-        return reward, done, player_hits_bounty, opponent_hits_bounty
+        return reward, True, player_hits_bounty, opponent_hits_bounty
     
     def evaluate_hands(self):
         player_hand = [Card.new(card) for card in self.player_hand]

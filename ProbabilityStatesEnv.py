@@ -67,6 +67,11 @@ class BountyHoldemEnv(gym.Env):
         self.action_log = dict()
         state, _ = self.get_round_initial_state(True)
         return state, _
+   
+    def get_legal_action_mask(self):
+        mask = np.array(self.get_legal_actions(True))
+
+        return mask
 
     def reset_round(self):
         if self.rounds_played % 25 == 0:

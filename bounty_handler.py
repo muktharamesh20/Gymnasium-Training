@@ -49,7 +49,7 @@ class Bounty():
 
 
     def get_normalized_percentages(self):
-        ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"]
+        ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]
         sum_of_all = sum(self.bounty.values())
 
         for a in range(13):
