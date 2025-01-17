@@ -236,6 +236,8 @@ class BountyHoldemEnv(gym.Env):
         return state
             
     def step(self, action, opponent_model = None):
+        if not isinstance(action, int):
+            action = int(action[0])
         #check if action is legal... if it's not, we end the round and give the bot a huge negative reward
         legal_actions = self.get_legal_actions(True)
         if not isinstance(action, int) or action < 0 or action > 8 or legal_actions[action] == 0:
@@ -245,7 +247,7 @@ class BountyHoldemEnv(gym.Env):
                 info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
                 return info_tuple[0], -10000000, done, {}, {}
             else:
-                return np.array(self.observation_space_shape), reward, done, {}, {}
+                return np.array(self.observation_space_shape), -10000000, done, {}, {}
         
         #if the action is legal, we continue the round
         if action == 0: # 0: fold, 1: call, 2: check; bet amounts in increments of 10 (0 to 400)
@@ -361,6 +363,8 @@ class BountyHoldemEnv(gym.Env):
         if opponent_action == 0:  # fold
             self.action_log.setdefault(self.street, []).append("fold")
             reward, done, player_bounty_hit, opp_bounty_hit = self.handle_round_end(result=1, opp_cards_revealed=False)
+            if done:
+                return np.zeros(self.observation_space_shape), reward, done, {}, {}
             self.reset_round()
             info_tuple = self.get_round_initial_state(opponent_model=opponent_model)
             if len(info_tuple) == 2:
