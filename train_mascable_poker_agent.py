@@ -8,8 +8,8 @@ import os
 import gymnasium as gym
 import numpy as np
 
-models_dir = "models/masked_nenv-ent1-1k"
-log_dir = "logs/masked_-nenv-ent1-1k"
+models_dir = "models/masked-self-play-10k-not-scratch"
+log_dir = "logs/masked_-self-play-10k-not-scratch"
 if not os.path.exists(models_dir):
     os.makedirs(models_dir)
 
@@ -21,14 +21,15 @@ def mask_fn(env: gym.Env):
 
 env = BountyHoldemEnv()
 env = ActionMasker(env, mask_fn)
-model = MaskablePPO(MaskableActorCriticPolicy, env, verbose=1, tensorboard_log=log_dir, ent_coef=0.01)
+#model = MaskablePPO(MaskableActorCriticPolicy, env, verbose=1, tensorboard_log=log_dir, ent_coef=0.01)
+model = MaskablePPO.load("models/masked_nenv-ent1-10k/1490000", env=env)
 
 
 
-TIMESTEPS = 1000
-for i in range(1, 30000000):
+TIMESTEPS = 10000
+for i in range(1, 3000000):
     print(i)
-    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="PPO")
+    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="self-play-10k-not-scratch")
     model.save(f"{models_dir}/{TIMESTEPS * i}")
 
 episodes = 100

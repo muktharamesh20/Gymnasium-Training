@@ -1,10 +1,15 @@
 import gymnasium as gym
 from gymnasium import spaces
+from sb3_contrib.ppo_mask import MaskablePPO
 import numpy as np
 import random
 from treys import Evaluator, Card
 import bounty_handler
 from stable_baselines3.common.vec_env import VecEnv
+
+
+
+
 
 class BountyHoldemEnv(gym.Env):
     def __init__(self):
@@ -19,6 +24,11 @@ class BountyHoldemEnv(gym.Env):
 
         self.ranks = "23456789TJQKA"
         self.reset()
+        self.potential_opps = [[0,0,0,0,0,0,0,0,1],
+                                [1,1,1,1,1,1,1,1,0],
+                                [0,1,1,0,0,0,0,0,0],
+                                [1,1,1,1,1,1,1,1,1],
+                                MaskablePPO.load("models/masked_nenv-ent1-10k/1490000")]
 
     def create_deck(self):
         ranks = '23456789TJQKA'
@@ -62,7 +72,7 @@ class BountyHoldemEnv(gym.Env):
 
     def get_legal_action_mask(self):
         mask = np.array(self.get_legal_actions(True))
-
+        #print("Maksed!", [index for index, i in mask if i == 1])
         return mask
 
     def reset_round(self):
@@ -240,6 +250,8 @@ class BountyHoldemEnv(gym.Env):
 
         state[:, 9:, 6:30] = np.ones((4, 4, 24)) * stack
 
+        self.legal_actions = legal_actions
+
         return state
             
     def step(self, action, opponent_model = None):
@@ -356,14 +368,23 @@ class BountyHoldemEnv(gym.Env):
             return self.handle_opponent(opponent_model)
 
     def handle_opponent(self, opponent_model):
+        possible_opps = self.potential_opps
         curr_state = self.get_state(False)
 
+        opponent_model = random.choices(possible_opps, weights=[0.01, 0.01, 0.1,0.3, 0.67])[0]
+
         if isinstance(opponent_model, list): #just inputed a random prob distribution
-            opponent_action = random.choices([0,1,2,3,4,5,6,7,8], weights=np.array(opponent_model) * self.get_legal_actions(False))[0]
+            if sum(np.array(opponent_model) * self.get_legal_actions(False)) != 0:
+                opponent_action = random.choices([0,1,2,3,4,5,6,7,8], weights=np.array(opponent_model) * self.get_legal_actions(False))[0]
+            else:
+                #print("here")
+                opponent_action = random.choices([0,1,2,3,4,5,6,7,8], weights=np.ones(9) * self.get_legal_actions(False))[0]
         elif opponent_model is None: #random opponent
             opponent_action = random.choices([0,1,2,3,4,5,6,7,8], weights=np.ones(9) * self.get_legal_actions(False))[0]
         else: #actually have a model
-            opponent_action, _ = opponent_model.predict(curr_state)
+            opponent_action, _ = opponent_model.predict(curr_state, action_masks = curr_state[3, :9, 6])
+            if not isinstance(opponent_action, int):
+                opponent_action = int(opponent_action[0])
             if self.get_legal_actions(False)[opponent_action] == 0:
                 opponent_action = random.choices([0,1,2,3,4,5,6,7,8], weights=np.ones(9) * self.get_legal_actions(False))[0]
 
@@ -606,15 +627,3 @@ class BountyHoldemEnv(gym.Env):
         print("Action Log: ", self.action_log)
         print("Actions: 0:fold, 1:call, 2:check, 3:1/2 pot, 4:3/4 pot, 5:1 pot, 6:3/2 pot, 7:2 pots, 8:all in")
         print("Legal Actions: ", self.get_legal_actions(True))
-
-# Register the environment
-gym.envs.registration.register(
-    id='BountyHoldem-v0',
-    entry_point='__main__:BountyHoldemEnv',
-)
-
-# Example usage
-if __name__ == "__main__":
-    env = gym.make('BountyHoldem-v0')
-    env.reset()
-    env.render()
